@@ -101,6 +101,13 @@ input:focus, select:focus { border-color: var(--accent); }
 
 .empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px; }
 
+/* Estilos de Lista de Proyectos */
+.proj-list-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px 16px; margin-bottom: 8px; font-weight: 600;
+}
+
 /* Estilos de Calendario */
 .calh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; text-transform: capitalize; font-weight: 700; }
 .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 16px; }
@@ -135,10 +142,10 @@ input:focus, select:focus { border-color: var(--accent); }
 <main class="wrap" id="view"></main>
 
 <script>
-var KEY = "focuspulse_v4";
+var KEY = "focuspulse_v6";
 var S = { 
   tasks: [], 
-  projects: ["Universidad", "Trabajo", "Personal", "Fotografía"], 
+  projects: [], 
   theme: "dark" 
 };
 var tab = "today";
@@ -199,9 +206,14 @@ function renderNav() {
   });
 }
 
+function getProjectOptions() {
+  if (!S.projects.length) return `<option value="General">General</option>`;
+  return S.projects.map(p => `<option value="${p}">${p}</option>`).join("");
+}
+
 function renderToday() {
   var view = document.getElementById("view");
-  var projOpts = S.projects.map(p => `<option value="${p}">${p}</option>`).join("");
+  var projOpts = getProjectOptions();
   
   view.innerHTML = `
     <div class="box">
@@ -220,7 +232,8 @@ function renderToday() {
 
 function addTodayTask() {
   var input = document.getElementById("newTask");
-  var proj = document.getElementById("taskProj").value;
+  var projSelect = document.getElementById("taskProj");
+  var proj = projSelect ? projSelect.value : "General";
   var txt = input.value.trim();
   if (!txt) return;
 
@@ -276,100 +289,45 @@ function deleteTask(id) {
   render();
 }
 
-/* Vista Proyectos */
-var selectedProj = S.projects[0] || "Universidad";
-
+/* Vista Exclusiva de Proyectos */
 function renderProjects() {
   var view = document.getElementById("view");
-  if (!S.projects.includes(selectedProj)) {
-    selectedProj = S.projects[0] || "";
-  }
-
-  var projChips = S.projects.map(p => `
-    <button class="btn ${p === selectedProj ? '' : 'btn-outline'}" style="${p === selectedProj ? '' : 'background:var(--card); border:1px solid var(--line); color:var(--text);'}" onclick="selectProject('${p}')">${p}</button>
+  
+  var projItems = S.projects.map(p => `
+    <div class="proj-list-item">
+      <span>📁 ${p}</span>
+      <button class="btn-icon danger" onclick="deleteProject('${p}')" title="Eliminar proyecto">✕</button>
+    </div>
   `).join("");
 
   view.innerHTML = `
     <div class="box">
-      <div class="title">Gestión de Proyectos / Tipos</div>
+      <div class="title" style="font-weight:700;">Mis Proyectos</div>
       <div class="input-row">
-        <input type="text" id="newProjName" placeholder="Nuevo tipo de proyecto (ej. Finanzas, Diseño...)">
-        <button class="btn" onclick="addNewProject()">Añadir Proyecto</button>
-      </div>
-      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-        ${projChips}
+        <input type="text" id="newProjName" placeholder="Nombre del nuevo proyecto...">
+        <button class="btn" onclick="addNewProject()">Agregar Proyecto</button>
       </div>
     </div>
-    <div class="box">
-      <div class="title">Agregar tarea en: <span style="color:var(--accent-light);">${selectedProj}</span></div>
-      <div class="input-row">
-        <input type="text" id="projTaskTxt" placeholder="Nueva tarea para ${selectedProj}...">
-        <input type="date" id="projTaskDate" value="${iso(new Date())}">
-        <button class="btn" onclick="addProjTask()">Agregar</button>
-      </div>
+    <div style="margin-top:16px;">
+      ${S.projects.length ? projItems : '<div class="empty">No tienes proyectos agregados todavía.</div>'}
     </div>
-    <div id="projTaskList"></div>
   `;
-  renderProjTaskList();
 }
-
-window.selectProject = function(p) {
-  selectedProj = p;
-  renderProjects();
-};
 
 window.addNewProject = function() {
   var input = document.getElementById("newProjName");
   var val = input.value.trim();
   if (!val || S.projects.includes(val)) return;
   S.projects.push(val);
-  selectedProj = val;
-  save();
-  render();
-};
-
-window.addProjTask = function() {
-  var txtInput = document.getElementById("projTaskTxt");
-  var dateInput = document.getElementById("projTaskDate");
-  var txt = txtInput.value.trim();
-  if (!txt) return;
-
-  S.tasks.push({
-    id: uid(),
-    title: txt,
-    due: dateInput.value || iso(new Date()),
-    project: selectedProj,
-    done: false
-  });
   save();
   renderProjects();
 };
 
-function renderProjTaskList() {
-  var list = document.getElementById("projTaskList");
-  if (!list) return;
-  var items = S.tasks.filter(t => t.project === selectedProj);
-
-  if (!items.length) {
-    list.innerHTML = `<div class="empty">No hay tareas en el proyecto "${selectedProj}".</div>`;
-    return;
-  }
-
-  list.innerHTML = "";
-  items.forEach(t => {
-    var el = document.createElement("div");
-    el.className = "item" + (t.done ? " done" : "");
-    el.innerHTML = `
-      <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleTask('${t.id}')">
-      <div class="item-content">
-        <div class="title">${t.title}</div>
-        <div class="meta"><span>Fecha: ${t.due || 'Sin fecha'}</span></div>
-      </div>
-      <button class="btn-icon danger" onclick="deleteTask('${t.id}')">×</button>
-    `;
-    list.appendChild(el);
-  });
-}
+window.deleteProject = function(p) {
+  S.projects = S.projects.filter(x => x !== p);
+  save();
+  renderProjects();
+};
 
 /* Vista Calendario */
 var calState = { y: new Date().getFullYear(), m: new Date().getMonth(), d: iso(new Date()) };
@@ -425,7 +383,7 @@ function renderCal() {
 
   container.appendChild(grid);
 
-  var projOpts = S.projects.map(p => `<option value="${p}">${p}</option>`).join("");
+  var projOpts = getProjectOptions();
   var boxAdd = document.createElement("div");
   boxAdd.className = "box";
   boxAdd.innerHTML = `
@@ -474,7 +432,7 @@ window.addCalTask = function() {
     id: uid(),
     title: txt,
     due: calState.d,
-    project: projInput.value,
+    project: projInput ? projInput.value : "General",
     done: false
   });
   save();
