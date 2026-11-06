@@ -89,4 +89,461 @@ input:focus, select:focus { border-color: var(--accent); }
 .item:hover { border-color: var(--muted); }
 .item.done { opacity: 0.6; }
 .item.done .title { text-decoration: line-through; color: var(--muted); }
-.item-content { flex: 1; min-width:
+.item-content { flex: 1; min-width: 0; }
+.title { font-weight: 600; color: var(--text); margin-bottom: 4px; word-break: break-word; }
+.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+.badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: var(--accent-bg); color: var(--accent-light); text-transform: uppercase; }
+
+.btn-icon { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; padding: 2px 6px; }
+.btn-icon:hover { color: var(--text); }
+.btn-icon.danger:hover { color: var(--danger); }
+
+.empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px; }
+
+/* Estilos de Calendario */
+.calh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; text-transform: capitalize; font-weight: 700; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 16px; }
+.dow { text-align: center; color: var(--muted); font-size: 12px; padding: 4px 0; font-weight: 600; }
+.day { font: inherit; min-height: 50px; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px; cursor: pointer; }
+.day i { font-style: normal; font-size: 10px; line-height: 1; color: var(--accent-light); letter-spacing: 1px; }
+.day.hoy { border-color: var(--accent); font-weight: 700; }
+.day.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+.day.sel i { color: #fff; }
+
+.focus-view { text-align: center; padding: 40px 16px; }
+.timer { font-size: 64px; font-weight: 800; font-family: monospace; color: var(--accent-light); margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="header-top">
+      <div class="logo">⚡ FocusPulse</div>
+      <div class="header-actions">
+        <div class="daily-progress" id="dailyProgress">
+          Hoy: <span id="progressCount">0/0</span> (<span id="progressPct">0%</span>)
+        </div>
+        <button class="btn-icon" id="themeBtn" title="Cambiar tema">🌙</button>
+      </div>
+    </div>
+    <nav id="nav"></nav>
+  </div>
+</header>
+
+<main class="wrap" id="view"></main>
+
+<script>
+var KEY = "focuspulse_v4";
+var S = { 
+  tasks: [], 
+  projects: ["Universidad", "Trabajo", "Personal", "Fotografía"], 
+  theme: "dark" 
+};
+var tab = "today";
+
+try {
+  var stored = localStorage.getItem(KEY);
+  if (stored) {
+    var parsed = JSON.parse(stored);
+    if (parsed.tasks) S.tasks = parsed.tasks;
+    if (parsed.projects) S.projects = parsed.projects;
+    if (parsed.theme) S.theme = parsed.theme;
+  }
+} catch (e) {}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  updateProgress();
+}
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+function iso(d) {
+  return d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0");
+}
+
+function updateProgress() {
+  var hoy = iso(new Date());
+  var hoyTasks = S.tasks.filter(t => t.due === hoy);
+  var hechas = hoyTasks.filter(t => t.done).length;
+  var total = hoyTasks.length;
+  var pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
+  
+  var pcEl = document.getElementById("progressCount");
+  var ppEl = document.getElementById("progressPct");
+  if (pcEl && ppEl) {
+    pcEl.innerText = hechas + "/" + total;
+    ppEl.innerText = pct + "%";
+  }
+}
+
+function renderNav() {
+  var nav = document.getElementById("nav");
+  if (!nav) return;
+  nav.innerHTML = "";
+  var tabs = [
+    ["today", "Hoy"],
+    ["projects", "Proyectos"],
+    ["cal", "Calendario"],
+    ["focus", "Modo Enfoque"]
+  ];
+  tabs.forEach(t => {
+    var btn = document.createElement("button");
+    btn.className = tab === t[0] ? "on" : "";
+    btn.innerText = t[1];
+    btn.onclick = function() { tab = t[0]; render(); };
+    nav.appendChild(btn);
+  });
+}
+
+function renderToday() {
+  var view = document.getElementById("view");
+  var projOpts = S.projects.map(p => `<option value="${p}">${p}</option>`).join("");
+  
+  view.innerHTML = `
+    <div class="box">
+      <div class="input-row">
+        <input type="text" id="newTask" placeholder="¿Qué necesitas hacer hoy?">
+        <select id="taskProj">
+          ${projOpts}
+        </select>
+        <button class="btn" onclick="addTodayTask()">Agregar</button>
+      </div>
+    </div>
+    <div id="taskList"></div>
+  `;
+  renderTaskList();
+}
+
+function addTodayTask() {
+  var input = document.getElementById("newTask");
+  var proj = document.getElementById("taskProj").value;
+  var txt = input.value.trim();
+  if (!txt) return;
+
+  S.tasks.push({
+    id: uid(),
+    title: txt,
+    due: iso(new Date()),
+    project: proj,
+    done: false
+  });
+  save();
+  input.value = "";
+  renderToday();
+}
+
+function renderTaskList() {
+  var list = document.getElementById("taskList");
+  if (!list) return;
+  var hoy = iso(new Date());
+  var items = S.tasks.filter(t => t.due === hoy);
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty">No tienes tareas pendientes para hoy. ¡Disfruta tu día!</div>`;
+    return;
+  }
+
+  list.innerHTML = "";
+  items.forEach(t => {
+    var el = document.createElement("div");
+    el.className = "item" + (t.done ? " done" : "");
+    el.innerHTML = `
+      <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleTask('${t.id}')">
+      <div class="item-content">
+        <div class="title">${t.title}</div>
+        <div class="meta">
+          <span class="badge">${t.project || 'General'}</span>
+        </div>
+      </div>
+      <button class="btn-icon danger" onclick="deleteTask('${t.id}')">×</button>
+    `;
+    list.appendChild(el);
+  });
+}
+
+function toggleTask(id) {
+  var t = S.tasks.find(x => x.id === id);
+  if (t) { t.done = !t.done; save(); render(); }
+}
+
+function deleteTask(id) {
+  S.tasks = S.tasks.filter(x => x.id !== id);
+  save();
+  render();
+}
+
+/* Vista Proyectos */
+var selectedProj = S.projects[0] || "Universidad";
+
+function renderProjects() {
+  var view = document.getElementById("view");
+  if (!S.projects.includes(selectedProj)) {
+    selectedProj = S.projects[0] || "";
+  }
+
+  var projChips = S.projects.map(p => `
+    <button class="btn ${p === selectedProj ? '' : 'btn-outline'}" style="${p === selectedProj ? '' : 'background:var(--card); border:1px solid var(--line); color:var(--text);'}" onclick="selectProject('${p}')">${p}</button>
+  `).join("");
+
+  view.innerHTML = `
+    <div class="box">
+      <div class="title">Gestión de Proyectos / Tipos</div>
+      <div class="input-row">
+        <input type="text" id="newProjName" placeholder="Nuevo tipo de proyecto (ej. Finanzas, Diseño...)">
+        <button class="btn" onclick="addNewProject()">Añadir Proyecto</button>
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+        ${projChips}
+      </div>
+    </div>
+    <div class="box">
+      <div class="title">Agregar tarea en: <span style="color:var(--accent-light);">${selectedProj}</span></div>
+      <div class="input-row">
+        <input type="text" id="projTaskTxt" placeholder="Nueva tarea para ${selectedProj}...">
+        <input type="date" id="projTaskDate" value="${iso(new Date())}">
+        <button class="btn" onclick="addProjTask()">Agregar</button>
+      </div>
+    </div>
+    <div id="projTaskList"></div>
+  `;
+  renderProjTaskList();
+}
+
+window.selectProject = function(p) {
+  selectedProj = p;
+  renderProjects();
+};
+
+window.addNewProject = function() {
+  var input = document.getElementById("newProjName");
+  var val = input.value.trim();
+  if (!val || S.projects.includes(val)) return;
+  S.projects.push(val);
+  selectedProj = val;
+  save();
+  render();
+};
+
+window.addProjTask = function() {
+  var txtInput = document.getElementById("projTaskTxt");
+  var dateInput = document.getElementById("projTaskDate");
+  var txt = txtInput.value.trim();
+  if (!txt) return;
+
+  S.tasks.push({
+    id: uid(),
+    title: txt,
+    due: dateInput.value || iso(new Date()),
+    project: selectedProj,
+    done: false
+  });
+  save();
+  renderProjects();
+};
+
+function renderProjTaskList() {
+  var list = document.getElementById("projTaskList");
+  if (!list) return;
+  var items = S.tasks.filter(t => t.project === selectedProj);
+
+  if (!items.length) {
+    list.innerHTML = `<div class="empty">No hay tareas en el proyecto "${selectedProj}".</div>`;
+    return;
+  }
+
+  list.innerHTML = "";
+  items.forEach(t => {
+    var el = document.createElement("div");
+    el.className = "item" + (t.done ? " done" : "");
+    el.innerHTML = `
+      <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleTask('${t.id}')">
+      <div class="item-content">
+        <div class="title">${t.title}</div>
+        <div class="meta"><span>Fecha: ${t.due || 'Sin fecha'}</span></div>
+      </div>
+      <button class="btn-icon danger" onclick="deleteTask('${t.id}')">×</button>
+    `;
+    list.appendChild(el);
+  });
+}
+
+/* Vista Calendario */
+var calState = { y: new Date().getFullYear(), m: new Date().getMonth(), d: iso(new Date()) };
+
+function renderCal() {
+  var view = document.getElementById("view");
+  var hi = iso(new Date());
+  
+  var nombreMes = new Date(calState.y, calState.m, 1).toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+
+  function mover(n) {
+    var d = new Date(calState.y, calState.m + n, 1);
+    calState.y = d.getFullYear();
+    calState.m = d.getMonth();
+    render();
+  }
+
+  var container = document.createElement("div");
+  container.innerHTML = `
+    <div class="calh">
+      <button class="btn" style="padding:6px 12px;" onclick="window.cambiarMes(-1)">‹</button>
+      <span>${nombreMes}</span>
+      <button class="btn" style="padding:6px 12px;" onclick="window.cambiarMes(1)">›</button>
+    </div>
+  `;
+
+  window.cambiarMes = function(n) { mover(n); };
+
+  var grid = document.createElement("div");
+  grid.className = "cal";
+  ["L", "M", "M", "J", "V", "S", "D"].forEach(x => {
+    grid.appendChild(document.createElement("span")).className = "dow";
+    grid.lastChild.innerText = x;
+  });
+
+  var primerDiaIndex = (new Date(calState.y, calState.m, 1).getDay() + 6) % 7;
+  var totalDias = new Date(calState.y, calState.m + 1, 0).getDate();
+
+  for (let i = 0; i < primerDiaIndex; i++) {
+    grid.appendChild(document.createElement("span"));
+  }
+
+  for (let n = 1; n <= totalDias; n++) {
+    let di = iso(new Date(calState.y, calState.m, n));
+    let cuenta = S.tasks.filter(t => t.due === di && !t.done).length;
+    
+    let btnDay = document.createElement("button");
+    btnDay.className = "day" + (di === hi ? " hoy" : "") + (di === calState.d ? " sel" : "");
+    btnDay.innerHTML = `<span>${n}</span>` + (cuenta ? `<i>${cuenta > 3 ? '•••' : '•'.repeat(cuenta)}</i>` : '');
+    btnDay.onclick = function() { calState.d = di; render(); };
+    grid.appendChild(btnDay);
+  }
+
+  container.appendChild(grid);
+
+  var projOpts = S.projects.map(p => `<option value="${p}">${p}</option>`).join("");
+  var boxAdd = document.createElement("div");
+  boxAdd.className = "box";
+  boxAdd.innerHTML = `
+    <div style="font-size:13px; font-weight:700; color:var(--muted);">Tareas para el ${calState.d}:</div>
+    <div class="input-row">
+      <input type="text" id="calTaskTxt" placeholder="Agregar tarea para este día...">
+      <select id="calTaskProj">${projOpts}</select>
+      <button class="btn" onclick="addCalTask()">Agregar</button>
+    </div>
+  `;
+  container.appendChild(boxAdd);
+
+  var listaDia = document.createElement("div");
+  var tareasDia = S.tasks.filter(t => t.due === calState.d);
+  
+  if (!tareasDia.length) {
+    listaDia.innerHTML = `<div class="empty">No hay tareas programadas para este día.</div>`;
+  } else {
+    tareasDia.forEach(t => {
+      var item = document.createElement("div");
+      item.className = "item" + (t.done ? " done" : "");
+      item.innerHTML = `
+        <input type="checkbox" ${t.done ? "checked" : ""} onchange="toggleTask('${t.id}')">
+        <div class="item-content">
+          <div class="title">${t.title}</div>
+          <div class="meta"><span class="badge">${t.project || 'General'}</span></div>
+        </div>
+        <button class="btn-icon danger" onclick="deleteTask('${t.id}')">×</button>
+      `;
+      listaDia.appendChild(item);
+    });
+  }
+  container.appendChild(listaDia);
+
+  view.innerHTML = "";
+  view.appendChild(container);
+}
+
+window.addCalTask = function() {
+  var txtInput = document.getElementById("calTaskTxt");
+  var projInput = document.getElementById("calTaskProj");
+  var txt = txtInput.value.trim();
+  if (!txt) return;
+
+  S.tasks.push({
+    id: uid(),
+    title: txt,
+    due: calState.d,
+    project: projInput.value,
+    done: false
+  });
+  save();
+  render();
+};
+
+function renderFocus() {
+  var view = document.getElementById("view");
+  var pend = S.tasks.filter(t => !t.done);
+  var actual = pend[0];
+
+  if (!actual) {
+    view.innerHTML = `<div class="empty">¡Excelente! No tienes tareas pendientes para enfocar.</div>`;
+    return;
+  }
+
+  view.innerHTML = `
+    <div class="focus-view">
+      <span class="badge">${actual.project || 'GENERAL'}</span>
+      <h2 style="margin-top:12px;">${actual.title}</h2>
+      <div class="timer" id="timer">25:00</div>
+      <button class="btn" onclick="toggleTimer()">Iniciar Pomodoro</button>
+      <button class="btn" style="background:var(--card); border:1px solid var(--line); color:var(--text); margin-left:8px;" onclick="toggleTask('${actual.id}')">Marcar Hecha</button>
+    </div>
+  `;
+}
+
+var timerInterval = null;
+var timerSecs = 25 * 60;
+function toggleTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  } else {
+    timerInterval = setInterval(() => {
+      if (timerSecs > 0) {
+        timerSecs--;
+        var m = String(Math.floor(timerSecs / 60)).padStart(2, '0');
+        var s = String(timerSecs % 60).padStart(2, '0');
+        var el = document.getElementById("timer");
+        if (el) el.innerText = m + ":" + s;
+      } else {
+        clearInterval(timerInterval);
+        alert("¡Tiempo cumplido! Toma un descanso.");
+      }
+    }, 1000);
+  }
+}
+
+function render() {
+  renderNav();
+  updateProgress();
+  if (tab === "today") renderToday();
+  else if (tab === "projects") renderProjects();
+  else if (tab === "cal") renderCal();
+  else if (tab === "focus") renderFocus();
+}
+
+var themeBtn = document.getElementById("themeBtn");
+if (themeBtn) {
+  themeBtn.onclick = function() {
+    S.theme = S.theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", S.theme);
+    save();
+  };
+}
+
+if (S.theme) document.documentElement.setAttribute("data-theme", S.theme);
+render();
+</script>
+</body>
+</html>
