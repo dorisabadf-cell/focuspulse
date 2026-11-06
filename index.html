@@ -94,6 +94,7 @@ input:focus, select:focus { border-color: var(--accent); }
 .meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
 
 .badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: var(--accent-bg); color: var(--accent-light); text-transform: uppercase; }
+.time-tag { color: var(--accent-light); font-weight: 600; }
 
 .btn-icon { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; padding: 2px 6px; }
 .btn-icon:hover { color: var(--text); }
@@ -146,7 +147,7 @@ input:focus, select:focus { border-color: var(--accent); }
 <main class="wrap" id="view"></main>
 
 <script>
-var KEY = "focuspulse_main"; // Clave fija permanente
+var KEY = "focuspulse_main";
 var S = { 
   tasks: [], 
   projects: [], 
@@ -154,7 +155,34 @@ var S = {
 };
 var tab = "today";
 
-// MIGRACIÓN AUTOMÁTICA DE DATOS ANTERIORES
+// Migración inteligente desde cualquier versión anterior
 try {
   var keysToTry = ["focuspulse_main", "focuspulse_v9", "focuspulse_v8", "focuspulse_v7", "focuspulse_v6", "focuspulse_v5", "focuspulse_v4", "focuspulse_v3"];
-  var all
+  var allTasks = [];
+  var allProjects = [];
+  var chosenTheme = "dark";
+
+  keysToTry.forEach(function(k) {
+    var raw = localStorage.getItem(k);
+    if (raw) {
+      var data = JSON.parse(raw);
+      if (data.tasks && Array.isArray(data.tasks)) {
+        data.tasks.forEach(function(t) {
+          if (!allTasks.some(x => x.id === t.id || x.title === t.title)) {
+            allTasks.push(t);
+          }
+        });
+      }
+      if (data.projects && Array.isArray(data.projects)) {
+        data.projects.forEach(function(p) {
+          if (!allProjects.includes(p)) {
+            allProjects.push(p);
+          }
+        });
+      }
+      if (data.theme) chosenTheme = data.theme;
+    }
+  });
+
+  S.tasks = allTasks;
+  S.projects = all
