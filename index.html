@@ -72,7 +72,7 @@ input, select {
   font: inherit; font-size: 14px; color: var(--text); background: var(--bg);
   border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; outline: none;
 }
-input[type="text"] { flex: 1 1 200px; }
+input[type="text"] { flex: 1 1 180px; }
 input:focus, select:focus { border-color: var(--accent); }
 
 .btn {
@@ -101,7 +101,7 @@ input:focus, select:focus { border-color: var(--accent); }
 
 .empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px; }
 
-/* Estilos de Lista de Proyectos */
+/* Estilos de Proyectos */
 .proj-card {
   display: flex; align-items: center; justify-content: space-between;
   background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
@@ -146,7 +146,7 @@ input:focus, select:focus { border-color: var(--accent); }
 <main class="wrap" id="view"></main>
 
 <script>
-var KEY = "focuspulse_v7";
+var KEY = "focuspulse_v8";
 var S = { 
   tasks: [], 
   projects: [], 
@@ -218,14 +218,14 @@ function getProjectOptions() {
 function renderToday() {
   var view = document.getElementById("view");
   var projOpts = getProjectOptions();
+  var hoyIso = iso(new Date());
   
   view.innerHTML = `
     <div class="box">
       <div class="input-row">
-        <input type="text" id="newTask" placeholder="¿Qué necesitas hacer hoy?">
-        <select id="taskProj">
-          ${projOpts}
-        </select>
+        <input type="text" id="newTask" placeholder="¿Qué necesitas hacer?">
+        <input type="date" id="taskDate" value="${hoyIso}">
+        <select id="taskProj">${projOpts}</select>
         <button class="btn" onclick="addTodayTask()">Agregar</button>
       </div>
     </div>
@@ -236,16 +236,16 @@ function renderToday() {
 
 function addTodayTask() {
   var input = document.getElementById("newTask");
+  var dateInput = document.getElementById("taskDate");
   var projSelect = document.getElementById("taskProj");
-  var proj = projSelect ? projSelect.value : "General";
   var txt = input.value.trim();
   if (!txt) return;
 
   S.tasks.push({
     id: uid(),
     title: txt,
-    due: iso(new Date()),
-    project: proj,
+    due: dateInput ? dateInput.value : iso(new Date()),
+    project: projSelect ? projSelect.value : "General",
     done: false
   });
   save();
@@ -293,7 +293,7 @@ function deleteTask(id) {
   render();
 }
 
-/* Vista de Proyectos con resumen de tareas */
+/* Vista de Proyectos con resumen */
 function renderProjects() {
   var view = document.getElementById("view");
   
@@ -405,6 +405,7 @@ function renderCal() {
     <div style="font-size:13px; font-weight:700; color:var(--muted);">Tareas para el ${calState.d}:</div>
     <div class="input-row">
       <input type="text" id="calTaskTxt" placeholder="Agregar tarea para este día...">
+      <input type="date" id="calTaskDate" value="${calState.d}">
       <select id="calTaskProj">${projOpts}</select>
       <button class="btn" onclick="addCalTask()">Agregar</button>
     </div>
@@ -439,6 +440,7 @@ function renderCal() {
 
 window.addCalTask = function() {
   var txtInput = document.getElementById("calTaskTxt");
+  var dateInput = document.getElementById("calTaskDate");
   var projInput = document.getElementById("calTaskProj");
   var txt = txtInput.value.trim();
   if (!txt) return;
@@ -446,7 +448,7 @@ window.addCalTask = function() {
   S.tasks.push({
     id: uid(),
     title: txt,
-    due: calState.d,
+    due: dateInput ? dateInput.value : calState.d,
     project: projInput ? projInput.value : "General",
     done: false
   });
