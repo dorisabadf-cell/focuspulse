@@ -102,11 +102,15 @@ input:focus, select:focus { border-color: var(--accent); }
 .empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px; }
 
 /* Estilos de Lista de Proyectos */
-.proj-list-item {
+.proj-card {
   display: flex; align-items: center; justify-content: space-between;
-  background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-  padding: 12px 16px; margin-bottom: 8px; font-weight: 600;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 10px; transition: border-color 0.2s;
 }
+.proj-card:hover { border-color: var(--muted); }
+.proj-title { font-weight: 700; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.proj-stats { font-size: 12px; color: var(--muted); display: flex; gap: 12px; margin-top: 2px; }
+.proj-stats span { color: var(--accent-light); font-weight: 600; }
 
 /* Estilos de Calendario */
 .calh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; text-transform: capitalize; font-weight: 700; }
@@ -142,7 +146,7 @@ input:focus, select:focus { border-color: var(--accent); }
 <main class="wrap" id="view"></main>
 
 <script>
-var KEY = "focuspulse_v6";
+var KEY = "focuspulse_v7";
 var S = { 
   tasks: [], 
   projects: [], 
@@ -289,27 +293,38 @@ function deleteTask(id) {
   render();
 }
 
-/* Vista Exclusiva de Proyectos */
+/* Vista de Proyectos con resumen de tareas */
 function renderProjects() {
   var view = document.getElementById("view");
   
-  var projItems = S.projects.map(p => `
-    <div class="proj-list-item">
-      <span>📁 ${p}</span>
-      <button class="btn-icon danger" onclick="deleteProject('${p}')" title="Eliminar proyecto">✕</button>
-    </div>
-  `).join("");
+  var projCards = S.projects.map(p => {
+    var projectTasks = S.tasks.filter(t => t.project === p);
+    var pend = projectTasks.filter(t => !t.done).length;
+    var done = projectTasks.filter(t => t.done).length;
+
+    return `
+      <div class="proj-card">
+        <div>
+          <div class="proj-title">📁 ${p}</div>
+          <div class="proj-stats">
+            <span>${pend} pendientes</span> • ${done} completadas
+          </div>
+        </div>
+        <button class="btn-icon danger" onclick="deleteProject('${p}')" title="Eliminar proyecto">✕</button>
+      </div>
+    `;
+  }).join("");
 
   view.innerHTML = `
     <div class="box">
-      <div class="title" style="font-weight:700;">Mis Proyectos</div>
+      <div class="title" style="font-weight:700;">Gestión de Proyectos</div>
       <div class="input-row">
         <input type="text" id="newProjName" placeholder="Nombre del nuevo proyecto...">
         <button class="btn" onclick="addNewProject()">Agregar Proyecto</button>
       </div>
     </div>
     <div style="margin-top:16px;">
-      ${S.projects.length ? projItems : '<div class="empty">No tienes proyectos agregados todavía.</div>'}
+      ${S.projects.length ? projCards : '<div class="empty">No tienes proyectos creados. ¡Crea el primero arriba!</div>'}
     </div>
   `;
 }
