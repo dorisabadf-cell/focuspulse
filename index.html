@@ -91,4 +91,506 @@ input:focus, select:focus { border-color: var(--accent); }
 .item.done .title { text-decoration: line-through; color: var(--muted); }
 .item-content { flex: 1; min-width: 0; }
 .title { font-weight: 600; color: var(--text); margin-bottom: 4px; word-break: break-word; }
-.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted
+.meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+.badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 700; background: var(--accent-bg); color: var(--accent-light); text-transform: uppercase; }
+.time-tag { color: var(--accent-light); font-weight: 600; }
+
+.btn-icon { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 18px; padding: 2px 6px; }
+.btn-icon:hover { color: var(--text); }
+.btn-icon.danger:hover { color: var(--danger); }
+
+.empty { text-align: center; color: var(--muted); padding: 40px 16px; font-size: 14px; }
+
+.proj-card {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 10px; transition: border-color 0.2s;
+}
+.proj-card:hover { border-color: var(--muted); }
+.proj-title { font-weight: 700; font-size: 15px; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.proj-stats { font-size: 12px; color: var(--muted); display: flex; gap: 12px; margin-top: 2px; }
+.proj-stats span { color: var(--accent-light); font-weight: 600; }
+
+.calh { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; text-transform: capitalize; font-weight: 700; }
+.cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 16px; }
+.dow { text-align: center; color: var(--muted); font-size: 12px; padding: 4px 0; font-weight: 600; }
+.day { font: inherit; min-height: 50px; border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2px; cursor: pointer; }
+.day i { font-style: normal; font-size: 10px; line-height: 1; color: var(--accent-light); letter-spacing: 1px; }
+.day.hoy { border-color: var(--accent); font-weight: 700; }
+.day.sel { background: var(--accent); color: #fff; border-color: var(--accent); }
+.day.sel i { color: #fff; }
+
+.focus-view { text-align: center; padding: 40px 16px; }
+.timer { font-size: 64px; font-weight: 800; font-family: monospace; color: var(--accent-light); margin: 20px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="header-top">
+      <div class="logo">⚡ FocusPulse</div>
+      <div class="header-actions">
+        <div class="daily-progress" id="dailyProgress">
+          Hoy: <span id="progressCount">0/0</span> (<span id="progressPct">0%</span>)
+        </div>
+        <button class="btn-icon" id="themeBtn" title="Cambiar tema">🌙</button>
+      </div>
+    </div>
+    <nav id="nav"></nav>
+  </div>
+</header>
+
+<main class="wrap" id="view"></main>
+
+<script>
+var KEY = "focuspulse_main";
+var S = { tasks: [], projects: [], theme: "dark" };
+var tab = "today";
+
+try {
+  var keysToTry = ["focuspulse_main", "focuspulse_v9", "focuspulse_v8", "focuspulse_v7", "focuspulse_v6", "focuspulse_v5", "focuspulse_v4", "focuspulse_v3"];
+  var allTasks = [];
+  var allProjects = [];
+  var chosenTheme = "dark";
+
+  keysToTry.forEach(function(k) {
+    var raw = localStorage.getItem(k);
+    if (raw) {
+      var data = JSON.parse(raw);
+      if (data.tasks && Array.isArray(data.tasks)) {
+        data.tasks.forEach(function(t) {
+          if (!allTasks.some(function(x){ return x.id === t.id || x.title === t.title; })) {
+            allTasks.push(t);
+          }
+        });
+      }
+      if (data.projects && Array.isArray(data.projects)) {
+        data.projects.forEach(function(p) {
+          if (allProjects.indexOf(p) === -1) {
+            allProjects.push(p);
+          }
+        });
+      }
+      if (data.theme) chosenTheme = data.theme;
+    }
+  });
+
+  S.tasks = allTasks;
+  S.projects = allProjects;
+  S.theme = chosenTheme;
+  save();
+} catch (e) {}
+
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+  updateProgress();
+}
+
+function uid() { return Math.random().toString(36).slice(2, 9); }
+function iso(d) {
+  return d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0");
+}
+
+function sortTasks(tasks) {
+  return tasks.sort(function(a, b) {
+    var timeA = a.time || "23:59";
+    var timeB = b.time || "23:59";
+    return timeA.localeCompare(timeB);
+  });
+}
+
+function updateProgress() {
+  var hoy = iso(new Date());
+  var hoyTasks = S.tasks.filter(function(t){ return t.due === hoy; });
+  var hechas = hoyTasks.filter(function(t){ return t.done; }).length;
+  var total = hoyTasks.length;
+  var pct = total > 0 ? Math.round((hechas / total) * 100) : 0;
+  
+  var pcEl = document.getElementById("progressCount");
+  var ppEl = document.getElementById("progressPct");
+  if (pcEl && ppEl) {
+    pcEl.innerText = hechas + "/" + total;
+    ppEl.innerText = pct + "%";
+  }
+}
+
+function renderNav() {
+  var nav = document.getElementById("nav");
+  if (!nav) return;
+  nav.innerHTML = "";
+  var tabs = [
+    ["today", "Hoy"],
+    ["projects", "Proyectos"],
+    ["cal", "Calendario"],
+    ["focus", "Modo Enfoque"]
+  ];
+  tabs.forEach(function(t) {
+    var btn = document.createElement("button");
+    btn.className = tab === t[0] ? "on" : "";
+    btn.innerText = t[1];
+    btn.onclick = function() { 
+      if (timerInterval) resetTimer();
+      tab = t[0]; 
+      render(); 
+    };
+    nav.appendChild(btn);
+  });
+}
+
+function getProjectOptions() {
+  if (!S.projects.length) return '<option value="General">General</option>';
+  return S.projects.map(function(p){ return '<option value="' + p + '">' + p + '</option>'; }).join("");
+}
+
+function renderToday() {
+  var view = document.getElementById("view");
+  var projOpts = getProjectOptions();
+  var hoyIso = iso(new Date());
+  
+  view.innerHTML = '<div class="box">' +
+    '<div class="input-row">' +
+      '<input type="text" id="newTask" placeholder="¿Qué necesitas hacer?">' +
+      '<input type="date" id="taskDate" value="' + hoyIso + '">' +
+      '<input type="time" id="taskTime">' +
+      '<select id="taskProj">' + projOpts + '</select>' +
+      '<button class="btn" onclick="addTodayTask()">Agregar</button>' +
+    '</div>' +
+  '</div>' +
+  '<div id="taskList"></div>';
+  renderTaskList();
+}
+
+function addTodayTask() {
+  var input = document.getElementById("newTask");
+  var dateInput = document.getElementById("taskDate");
+  var timeInput = document.getElementById("taskTime");
+  var projSelect = document.getElementById("taskProj");
+  var txt = input.value.trim();
+  if (!txt) return;
+
+  S.tasks.push({
+    id: uid(),
+    title: txt,
+    due: dateInput ? dateInput.value : iso(new Date()),
+    time: timeInput ? timeInput.value : "",
+    project: projSelect ? projSelect.value : "General",
+    done: false
+  });
+  save();
+  input.value = "";
+  renderToday();
+}
+
+function renderTaskList() {
+  var list = document.getElementById("taskList");
+  if (!list) return;
+  var hoy = iso(new Date());
+  var items = sortTasks(S.tasks.filter(function(t){ return t.due === hoy; }));
+
+  if (!items.length) {
+    list.innerHTML = '<div class="empty">No tienes tareas pendientes para hoy. ¡Disfruta tu día!</div>';
+    return;
+  }
+
+  list.innerHTML = "";
+  items.forEach(function(t) {
+    var el = document.createElement("div");
+    el.className = "item" + (t.done ? " done" : "");
+    var timeHtml = t.time ? '<span class="time-tag">⏰ ' + t.time + '</span> • ' : '';
+    el.innerHTML = '<input type="checkbox" ' + (t.done ? 'checked' : '') + ' onchange="toggleTask(\'' + t.id + '\')">' +
+      '<div class="item-content">' +
+        '<div class="title">' + t.title + '</div>' +
+        '<div class="meta">' +
+          timeHtml +
+          '<span class="badge">' + (t.project || 'General') + '</span>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn-icon danger" onclick="deleteTask(\'' + t.id + '\')">×</button>';
+    list.appendChild(el);
+  });
+}
+
+function toggleTask(id) {
+  var t = S.tasks.find(function(x){ return x.id === id; });
+  if (t) { 
+    t.done = !t.done; 
+    save(); 
+    if (tab === "focus") resetTimer();
+    render(); 
+  }
+}
+
+function deleteTask(id) {
+  S.tasks = S.tasks.filter(function(x){ return x.id !== id; });
+  save();
+  if (tab === "focus") resetTimer();
+  render();
+}
+
+function renderProjects() {
+  var view = document.getElementById("view");
+  
+  var projCards = S.projects.map(function(p) {
+    var projectTasks = S.tasks.filter(function(t){ return t.project === p; });
+    var pend = projectTasks.filter(function(t){ return !t.done; }).length;
+    var done = projectTasks.filter(function(t){ return t.done; }).length;
+
+    return '<div class="proj-card">' +
+      '<div>' +
+        '<div class="proj-title">📁 ' + p + '</div>' +
+        '<div class="proj-stats">' +
+          '<span>' + pend + ' pendientes</span> • ' + done + ' completadas' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn-icon danger" onclick="deleteProject(\'' + p + '\')" title="Eliminar proyecto">✕</button>' +
+    '</div>';
+  }).join("");
+
+  view.innerHTML = '<div class="box">' +
+    '<div class="title" style="font-weight:700;">Gestión de Proyectos</div>' +
+    '<div class="input-row">' +
+      '<input type="text" id="newProjName" placeholder="Nombre del nuevo proyecto...">' +
+      '<button class="btn" onclick="addNewProject()">Agregar Proyecto</button>' +
+    '</div>' +
+  '</div>' +
+  '<div style="margin-top:16px;">' +
+    (S.projects.length ? projCards : '<div class="empty">No tienes proyectos creados. ¡Crea el primero arriba!</div>') +
+  '</div>';
+}
+
+window.addNewProject = function() {
+  var input = document.getElementById("newProjName");
+  var val = input.value.trim();
+  if (!val || S.projects.indexOf(val) !== -1) return;
+  S.projects.push(val);
+  save();
+  renderProjects();
+};
+
+window.deleteProject = function(p) {
+  S.projects = S.projects.filter(function(x){ return x !== p; });
+  save();
+  renderProjects();
+};
+
+var calState = { y: new Date().getFullYear(), m: new Date().getMonth(), d: iso(new Date()) };
+
+function renderCal() {
+  var view = document.getElementById("view");
+  var hi = iso(new Date());
+  
+  var nombreMes = new Date(calState.y, calState.m, 1).toLocaleDateString("es-PE", { month: "long", year: "numeric" });
+
+  function mover(n) {
+    var d = new Date(calState.y, calState.m + n, 1);
+    calState.y = d.getFullYear();
+    calState.m = d.getMonth();
+    render();
+  }
+
+  var container = document.createElement("div");
+  container.innerHTML = '<div class="calh">' +
+    '<button class="btn" style="padding:6px 12px;" onclick="window.cambiarMes(-1)">‹</button>' +
+    '<span>' + nombreMes + '</span>' +
+    '<button class="btn" style="padding:6px 12px;" onclick="window.cambiarMes(1)">›</button>' +
+  '</div>';
+
+  window.cambiarMes = function(n) { mover(n); };
+
+  var grid = document.createElement("div");
+  grid.className = "cal";
+  ["L", "M", "M", "J", "V", "S", "D"].forEach(function(x) {
+    var el = document.createElement("span");
+    el.className = "dow";
+    el.innerText = x;
+    grid.appendChild(el);
+  });
+
+  var primerDiaIndex = (new Date(calState.y, calState.m, 1).getDay() + 6) % 7;
+  var totalDias = new Date(calState.y, calState.m + 1, 0).getDate();
+
+  for (var i = 0; i < primerDiaIndex; i++) {
+    grid.appendChild(document.createElement("span"));
+  }
+
+  for (var n = 1; n <= totalDias; n++) {
+    (function(dayNum){
+      var di = iso(new Date(calState.y, calState.m, dayNum));
+      var cuenta = S.tasks.filter(function(t){ return t.due === di && !t.done; }).length;
+      
+      var btnDay = document.createElement("button");
+      btnDay.className = "day" + (di === hi ? " hoy" : "") + (di === calState.d ? " sel" : "");
+      btnDay.innerHTML = '<span>' + dayNum + '</span>' + (cuenta ? '<i>' + (cuenta > 3 ? '•••' : '•'.repeat(cuenta)) + '</i>' : '');
+      btnDay.onclick = function() { calState.d = di; render(); };
+      grid.appendChild(btnDay);
+    })(n);
+  }
+
+  container.appendChild(grid);
+
+  var projOpts = getProjectOptions();
+  var boxAdd = document.createElement("div");
+  boxAdd.className = "box";
+  boxAdd.innerHTML = '<div style="font-size:13px; font-weight:700; color:var(--muted);">Tareas para el ' + calState.d + ':</div>' +
+    '<div class="input-row">' +
+      '<input type="text" id="calTaskTxt" placeholder="Agregar tarea para este día...">' +
+      '<input type="date" id="calTaskDate" value="' + calState.d + '">' +
+      '<input type="time" id="calTaskTime">' +
+      '<select id="calTaskProj">' + projOpts + '</select>' +
+      '<button class="btn" onclick="addCalTask()">Agregar</button>' +
+    '</div>';
+  container.appendChild(boxAdd);
+
+  var listaDia = document.createElement("div");
+  var tareasDia = sortTasks(S.tasks.filter(function(t){ return t.due === calState.d; }));
+  
+  if (!tareasDia.length) {
+    listaDia.innerHTML = '<div class="empty">No hay tareas programadas para este día.</div>';
+  } else {
+    tareasDia.forEach(function(t) {
+      var item = document.createElement("div");
+      item.className = "item" + (t.done ? " done" : "");
+      var timeHtml = t.time ? '<span class="time-tag">⏰ ' + t.time + '</span> • ' : '';
+      item.innerHTML = '<input type="checkbox" ' + (t.done ? 'checked' : '') + ' onchange="toggleTask(\'' + t.id + '\')">' +
+        '<div class="item-content">' +
+          '<div class="title">' + t.title + '</div>' +
+          '<div class="meta">' +
+            timeHtml +
+            '<span class="badge">' + (t.project || 'General') + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<button class="btn-icon danger" onclick="deleteTask(\'' + t.id + '\')">×</button>';
+      listaDia.appendChild(item);
+    });
+  }
+  container.appendChild(listaDia);
+
+  view.innerHTML = "";
+  view.appendChild(container);
+}
+
+window.addCalTask = function() {
+  var txtInput = document.getElementById("calTaskTxt");
+  var dateInput = document.getElementById("calTaskDate");
+  var timeInput = document.getElementById("calTaskTime");
+  var projInput = document.getElementById("calTaskProj");
+  var txt = txtInput.value.trim();
+  if (!txt) return;
+
+  S.tasks.push({
+    id: uid(),
+    title: txt,
+    due: dateInput ? dateInput.value : calState.d,
+    time: timeInput ? timeInput.value : "",
+    project: projInput ? projInput.value : "General",
+    done: false
+  });
+  save();
+  render();
+};
+
+var timerInterval = null;
+var timerSecs = 0;
+var timerMode = "countup";
+
+function renderFocus() {
+  var view = document.getElementById("view");
+  var pend = sortTasks(S.tasks.filter(function(t){ return !t.done; }));
+  var actual = pend[0];
+
+  if (!actual) {
+    view.innerHTML = '<div class="empty">¡Excelente! No tienes tareas pendientes para enfocar.</div>';
+    return;
+  }
+
+  var min = String(Math.floor(timerSecs / 60)).padStart(2, '0');
+  var sec = String(timerSecs % 60).padStart(2, '0');
+  var timeHtml = actual.time ? '<div style="font-size:13px; color:var(--muted); margin-top:4px;">⏰ Programada: ' + actual.time + '</div>' : '';
+
+  view.innerHTML = '<div class="focus-view">' +
+    '<span class="badge">' + (actual.project || 'GENERAL') + '</span>' +
+    '<h2 style="margin-top:12px;">' + actual.title + '</h2>' +
+    timeHtml +
+    '<div style="margin-top:16px;">' +
+      '<button class="btn" style="background:' + (timerMode==='countup'?'var(--accent)':'var(--card)') + '; border:1px solid var(--line); font-size:12px; padding:6px 12px;" onclick="setTimerMode(\'countup\')">Cronómetro (+)</button>' +
+      '<button class="btn" style="background:' + (timerMode==='countdown'?'var(--accent)':'var(--card)') + '; border:1px solid var(--line); font-size:12px; padding:6px 12px; margin-left:4px;" onclick="setTimerMode(\'countdown\')">Pomodoro 25m (-)</button>' +
+    '</div>' +
+    '<div class="timer" id="timer">' + min + ':' + sec + '</div>' +
+    '<button class="btn" id="startBtn" onclick="toggleTimer()">' + (timerInterval ? 'Pausar' : 'Iniciar') + '</button>' +
+    '<button class="btn" style="background:var(--card); border:1px solid var(--line); color:var(--text); margin-left:8px;" onclick="resetTimer()">Reiniciar</button>' +
+    '<button class="btn" style="background:var(--accent-bg); border:1px solid var(--accent); color:var(--accent-light); margin-left:8px;" onclick="toggleTask(\'' + actual.id + '\')">✓ Completar Tarea</button>' +
+  '</div>';
+}
+
+function setTimerMode(mode) {
+  resetTimer();
+  timerMode = mode;
+  if (timerMode === "countdown") timerSecs = 25 * 60;
+  else timerSecs = 0;
+  renderFocus();
+}
+
+function resetTimer() {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+  timerSecs = timerMode === "countdown" ? 25 * 60 : 0;
+}
+
+function toggleTimer() {
+  var startBtn = document.getElementById("startBtn");
+  
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+    if (startBtn) startBtn.innerText = "Iniciar";
+  } else {
+    if (startBtn) startBtn.innerText = "Pausar";
+    timerInterval = setInterval(function() {
+      if (timerMode === "countup") {
+        timerSecs++;
+      } else {
+        if (timerSecs > 0) {
+          timerSecs--;
+        } else {
+          clearInterval(timerInterval);
+          timerInterval = null;
+          alert("¡Tiempo cumplido! Toma un descanso.");
+        }
+      }
+      var m = String(Math.floor(timerSecs / 60)).padStart(2, '0');
+      var s = String(timerSecs % 60).padStart(2, '0');
+      var el = document.getElementById("timer");
+      if (el) el.innerText = m + ":" + s;
+    }, 1000);
+  }
+}
+
+function render() {
+  renderNav();
+  updateProgress();
+  if (tab === "today") renderToday();
+  else if (tab === "projects") renderProjects();
+  else if (tab === "cal") renderCal();
+  else if (tab === "focus") renderFocus();
+}
+
+var themeBtn = document.getElementById("themeBtn");
+if (themeBtn) {
+  themeBtn.onclick = function() {
+    S.theme = S.theme === "dark" ? "light" : "dark";
+    document.documentElement.setAttribute("data-theme", S.theme);
+    save();
+  };
+}
+
+if (S.theme) document.documentElement.setAttribute("data-theme", S.theme);
+render();
+</script>
+</body>
+</html>
